@@ -7,11 +7,6 @@ require_once('Route.php');
 
 class Router implements IRouter {
 
-  // All registered routes must conform to the following pattern
-  const ROUTE_SCHEMA_PATTERN = '/^(\/({)?(\w+)(})?)+$/';
-  // Valid URL pattern
-  const ROUTE_PATTERN = '/^(\/\w+)+(\?(\S+?=\S+?)?(?(3)(&(?3))*))*$/';
-
   private $routeBase = '';
   private $routeParser;
   private $routeConfigs = array();
@@ -51,7 +46,6 @@ class Router implements IRouter {
       $routeString = $_SERVER["REQUEST_URI"];
     }
     $routeString = trim($routeString);
-    // TEMPORARY: remove file extension
     $uri = preg_replace(
       '/^' . preg_quote($this->routeBase, '/') . '/',
       '',
@@ -59,32 +53,30 @@ class Router implements IRouter {
     );
     list($path, $params) = explode("?", $uri, 2);
 
-    // echo "$path\n";
-    // echo "$params\n";
-
     // think of making this O(1)
     foreach ($this->routeConfigs as $config) {
       $route = $config->getRoute();
       if ($this->routeParser->matches($route, $path)) {
         $parameters = $this->routeParser->extractParameters($route, $path);
-        // var_dump($parameters);
         $action = $config->getAction($_SERVER["REQUEST_METHOD"]);
         if ($action !== null) {
+          // $action(...$parameters); // !!! >= PHP 5.6 (~3 times faster)
           call_user_func_array($action, $parameters);
-          // $action(...$parameters); !!! >= PHP 5.6 (~3 times faster)
-          return;
+        } else {
+          throw new Exception("No callback bound to route $route->getSchema()");
         }
+        return;
       }
     }
 
-    throw new Exception("Not Found");
+    throw new NoRouteMatchException("No registered route to match path $path");
   }
 
   public function setRouteBase($routeBase) {
     if (!is_string($routeBase)) {
       throw new InvalidArgumentException("Route base must be a string");
     }
-    // if ($routeBase[-1] === '/') $routeBase = $routeBase[:-1];
+    // add optional trailing slash?
     $this->routeBase = $routeBase;
   }
 
@@ -96,14 +88,11 @@ class Router implements IRouter {
     if (!is_string($routeSchema)) {
       throw new InvalidArgumentException("Route schema must be a string");
     }
-    if ($httpMethods !== null && !is_string($httpMethods) && !is_array($httpMethods)) {
-      throw new InvalidArgumentException("HTTP method argument must be a string or an array");
-    }
-    $routeSchema = trim($routeSchema);
-    if (!($this->isRouteSchemaValid($routeSchema))) {
-      throw new InvalidArgumentException("Supplied route schema doesn't conform to predefined rules");
+    if (isset($httpMethods) && !is_string($httpMethods) && !is_array($httpMethods)) {
+      throw new InvalidArgumentException("HTTP method argument must be a string or an array of strings");
     }
 
+    $routeSchema = trim($routeSchema);
     $routeConfig = $this->routeConfigs[$routeSchema];
     if ($routeConfig === null) {
       $route = $this->routeParser->parse($routeSchema);
@@ -165,5 +154,13 @@ class RouteConfig {
     }
   }
 
+
+}
+
+class NoRouteMatchException extends Exception {
+
+  public function __construct($message='') {
+    parent::__construct($message);
+  }
 
 }

@@ -2,11 +2,12 @@
 
 class Route {
 
-  // example: /library/{author}/{book}
+  // path: /library/{author}/{book}
+  // parameterNames: [author, book]
   private $parameterNames;
   private $schema;
 
-  public function __construct($schema, $parameterNames=null) {
+  public function __construct($schema, $parameterNames=[]) {
     $this->schema = $schema;
     $this->parameterNames = $parameterNames;
   }
